@@ -194,7 +194,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         // Building the url to the web service
         String url = "https://router.project-osrm.org/route/v1/driving/" + str_origin + ";" +
-                str_dest + "?overview=false";
+                str_dest + "?alternatives=true&geometries=polyline";
 
         System.out.println(url);
 

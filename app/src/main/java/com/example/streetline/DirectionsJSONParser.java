@@ -24,19 +24,39 @@ public class DirectionsJSONParser {
         List<Location> locations = new ArrayList<>();
 
         try {
-            JSONArray arr = jObject.getJSONArray("waypoints");
+            //JSONArray arr = jObject.getJSONArray("waypoints");
+
+            JSONArray arr1 = jObject.getJSONArray("routes");
+
+            JSONArray arr = decodeGeometry(arr1.getJSONObject(0).getString("geometry"), false);
+
+            System.out.println(arr1.getJSONObject(0).getString("geometry"));
+
+            decodeGeometry(arr1.getJSONObject(0).getString("geometry"), false);
 
             String location = "";
 
             for (int i = 0; i < arr.length(); i++)
             {
-                location = arr.getJSONObject(i).getString("location");
+//                location = arr.getJSONObject(i).getString("location");
+//
+//                int firstPoint = location.indexOf(',');
+//
+//                double longitude = Double.parseDouble(location.substring(1,firstPoint));
+//
+//                double latitude = Double.parseDouble(location.substring(firstPoint+1, location.length() - 1));
+
+                System.out.println("here");
+
+                System.out.println(arr.getString(i));
+
+                location = arr.getString(i);
 
                 int firstPoint = location.indexOf(',');
 
-                double longitude = Double.parseDouble(location.substring(1,firstPoint));
+                double latitude = Double.parseDouble(location.substring(1,firstPoint));
 
-                double latitude = Double.parseDouble(location.substring(firstPoint+1, location.length() - 1));
+                double longitude = Double.parseDouble(location.substring(firstPoint+1, location.length() - 1));
 
                 System.out.println(longitude + " " + latitude);
 
@@ -49,5 +69,62 @@ public class DirectionsJSONParser {
         }
 
         return locations;
+    }
+
+    public static JSONArray decodeGeometry(String encodedGeometry, boolean inclElevation) {
+        JSONArray geometry = new JSONArray();
+        int len = encodedGeometry.length();
+        int index = 0;
+        int lat = 0;
+        int lng = 0;
+        int ele = 0;
+
+        while (index < len) {
+            int result = 1;
+            int shift = 0;
+            int b;
+            do {
+                b = encodedGeometry.charAt(index++) - 63 - 1;
+                result += b << shift;
+                shift += 5;
+            } while (b >= 0x1f);
+            lat += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+
+            result = 1;
+            shift = 0;
+            do {
+                b = encodedGeometry.charAt(index++) - 63 - 1;
+                result += b << shift;
+                shift += 5;
+            } while (b >= 0x1f);
+            lng += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+
+
+            if(inclElevation){
+                result = 1;
+                shift = 0;
+                do {
+                    b = encodedGeometry.charAt(index++) - 63 - 1;
+                    result += b << shift;
+                    shift += 5;
+                } while (b >= 0x1f);
+                ele += (result & 1) != 0 ? ~(result >> 1) : (result >> 1);
+            }
+
+            JSONArray location = new JSONArray();
+            try {
+                location.put(lat / 1E5);
+                location.put(lng / 1E5);
+                if(inclElevation){
+                    location.put((float) (ele / 100));
+                }
+                geometry.put(location);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+
+        System.out.println(geometry);
+        return geometry;
     }
 }
