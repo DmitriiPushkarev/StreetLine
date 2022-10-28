@@ -2,10 +2,17 @@ package com.example.streetline;
 
 import androidx.fragment.app.FragmentActivity;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.graphics.Color;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Button;
+import android.widget.RelativeLayout;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -15,6 +22,8 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.material.snackbar.Snackbar;
+import com.rengwuxian.materialedittext.MaterialEditText;
 
 import org.json.JSONObject;
 
@@ -31,7 +40,12 @@ import java.util.List;
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
     private GoogleMap mMap;
+
     ArrayList markerPoints= new ArrayList();
+
+    Button button;
+
+    RelativeLayout root;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,8 +55,60 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        root = findViewById(R.id.root_element);
+
+        button = findViewById(R.id.button);
+
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                showWindow();
+            }
+        });
     }
 
+    private void showWindow(){
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
+        dialog.setTitle("Оцените качество дороги");
+        dialog.setMessage("Оценка");
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View register_window = inflater.inflate(R.layout.register_window, null);
+        dialog.setView(register_window);
+
+        final MaterialEditText email = register_window.findViewById(R.id.emailField);
+        final MaterialEditText pass = register_window.findViewById(R.id.passField);
+        final MaterialEditText comment = register_window.findViewById(R.id.commemtField);
+
+        dialog.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+            }
+        });
+        dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                if(TextUtils.isEmpty(email.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                }
+
+                if(TextUtils.isEmpty(pass.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                }
+
+                if(TextUtils.isEmpty(comment.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+        });
+
+        dialog.show();
+    }
 
     /**
      * Manipulates the map once available.
