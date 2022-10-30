@@ -13,11 +13,11 @@
         android:orientation="vertical">
 
     <com.rengwuxian.materialedittext.MaterialEditText
-        android:id="@+id/emailField"
+        android:id="@+id/ratingOfRouteField"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="Оценка"
-        android:inputType="textEmailAddress"
+        android:inputType="textShortMessage"
         android:text=""
         android:textColor="@color/primary_dark_material_light"
         android:textColorHint="@color/primary_dark_material_dark"
@@ -31,9 +31,9 @@
     <com.rengwuxian.materialedittext.MaterialEditText
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:id="@+id/passField"
+        android:id="@+id/typeOfRouteField"
         android:hint="Тип дороги"
-        android:inputType="textPassword"
+        android:inputType="textShortMessage"
         android:text=""
         android:textColor="@color/primary_dark_material_light"
         android:textColorHint="@color/primary_dark_material_dark"

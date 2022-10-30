@@ -41,11 +41,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private GoogleMap mMap;
 
-    ArrayList markerPoints= new ArrayList();
+    private ArrayList markerPoints= new ArrayList();
 
-    Button button;
+    private Button button;
 
-    RelativeLayout root;
+    private RelativeLayout root;
+
+    private boolean routeBuildingMode = false;
+
+    private List<Route> routes = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,12 +67,29 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                showWindow();
+                changeMode();
             }
         });
+
+        //Database db = new Database();
     }
 
-    private void showWindow(){
+    private void changeMode(){
+        if(routeBuildingMode){
+            Snackbar.make(root, "Выход из режима оценки дороги", Snackbar.LENGTH_SHORT).show();
+            if (markerPoints.size() > 1) {
+                markerPoints.clear();
+                mMap.clear();
+            }
+            routeBuildingMode = false;
+        } else
+        {
+            Snackbar.make(root, "Отметьте две точки", Snackbar.LENGTH_SHORT).show();
+            routeBuildingMode = true;
+        }
+    }
+
+    private void showWindow(List<Location> locations){
         AlertDialog.Builder dialog = new AlertDialog.Builder(this);
         dialog.setTitle("Оцените качество дороги");
         dialog.setMessage("Оценка");
@@ -77,9 +98,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         View register_window = inflater.inflate(R.layout.register_window, null);
         dialog.setView(register_window);
 
-        final MaterialEditText email = register_window.findViewById(R.id.emailField);
-        final MaterialEditText pass = register_window.findViewById(R.id.passField);
-        final MaterialEditText comment = register_window.findViewById(R.id.commemtField);
+        final MaterialEditText ratingOfRoute = register_window.findViewById(R.id.ratingOfRouteField);
+        final MaterialEditText typeOfRoute = register_window.findViewById(R.id.typeOfRouteField);
+        final MaterialEditText commentOfRoute = register_window.findViewById(R.id.commemtField);
 
         dialog.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
             @Override
@@ -88,22 +109,38 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
         });
         dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
+
+            String rating;
+
+            String typeOfRoad;
+
+            String comment;
+
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
-                if(TextUtils.isEmpty(email.getText().toString())){
+                if(TextUtils.isEmpty(ratingOfRoute.getText().toString())){
                     Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
                     return;
+                } else{
+                    rating = ratingOfRoute.getText().toString();
                 }
 
-                if(TextUtils.isEmpty(pass.getText().toString())){
+                if(TextUtils.isEmpty(typeOfRoute.getText().toString())){
                     Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
                     return;
+                } else{
+                    typeOfRoad = typeOfRoute.getText().toString();
                 }
 
-                if(TextUtils.isEmpty(comment.getText().toString())){
+                if(TextUtils.isEmpty(commentOfRoute.getText().toString())){
                     Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
                     return;
+                } else{
+                    comment = commentOfRoute.getText().toString();
                 }
+
+                routes.add(new Route(locations,rating, typeOfRoad, comment));
+                Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
             }
         });
 
@@ -130,44 +167,46 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onMapClick(LatLng latLng) {
 
-                if (markerPoints.size() > 1) {
-                    markerPoints.clear();
-                    mMap.clear();
+                if(routeBuildingMode) {
+
+                    if (markerPoints.size() > 1) {
+                        markerPoints.clear();
+                        mMap.clear();
+                    }
+
+                    // Adding new item to the ArrayList
+                    markerPoints.add(latLng);
+
+                    // Creating MarkerOptions
+                    MarkerOptions options = new MarkerOptions();
+
+                    // Setting the position of the marker
+                    options.position(latLng);
+
+                    if (markerPoints.size() == 1) {
+                        options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
+                    } else if (markerPoints.size() == 2) {
+                        options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
+                    }
+
+                    // Add new marker to the Google Map Android API V2
+                    mMap.addMarker(options);
+
+                    // Checks, whether start and end locations are captured
+                    if (markerPoints.size() >= 2) {
+                        LatLng origin = (LatLng) markerPoints.get(0);
+                        LatLng dest = (LatLng) markerPoints.get(1);
+
+                        // Getting URL to the Google Directions API
+                        String url = getDirectionsUrl(origin, dest);
+
+                        DownloadTask downloadTask = new DownloadTask();
+
+                        // Start downloading json data from Google Directions API
+
+                        downloadTask.execute(url);
+                    }
                 }
-
-                // Adding new item to the ArrayList
-                markerPoints.add(latLng);
-
-                // Creating MarkerOptions
-                MarkerOptions options = new MarkerOptions();
-
-                // Setting the position of the marker
-                options.position(latLng);
-
-                if (markerPoints.size() == 1) {
-                    options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN));
-                } else if (markerPoints.size() == 2) {
-                    options.icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_RED));
-                }
-
-                // Add new marker to the Google Map Android API V2
-                mMap.addMarker(options);
-
-                // Checks, whether start and end locations are captured
-                if (markerPoints.size() >= 2) {
-                    LatLng origin = (LatLng) markerPoints.get(0);
-                    LatLng dest = (LatLng) markerPoints.get(1);
-
-                    // Getting URL to the Google Directions API
-                    String url = getDirectionsUrl(origin, dest);
-
-                    DownloadTask downloadTask = new DownloadTask();
-
-                    // Start downloading json data from Google Directions API
-
-                    downloadTask.execute(url);
-                }
-
             }
         });
     }
@@ -247,6 +286,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             // Drawing polyline in the Google Map for the i-th route
             mMap.addPolyline(lineOptions);
+
+            showWindow(locations);
         }
     }
 
@@ -261,8 +302,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // Building the url to the web service
         String url = "https://router.project-osrm.org/route/v1/driving/" + str_origin + ";" +
                 str_dest + "?alternatives=true&geometries=polyline";
-
-        System.out.println(url);
 
         return url;
     }
@@ -294,8 +333,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             }
 
             data = sb.toString();
-
-            System.out.println(data);
 
             br.close();
 
