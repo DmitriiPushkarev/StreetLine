@@ -31,8 +31,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.InvocationTargetException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -140,6 +145,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 }
 
                 routes.add(new Route(locations,rating, typeOfRoad, comment));
+
                 Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
             }
         });
@@ -222,6 +228,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 data = downloadUrl(url[0]);
             } catch (Exception e) {
                 Log.d("Background Task", e.toString());
+            }
+
+            String sqlCommand = "INSERT INTO streetline.marker_table(\n" +
+                    "\tmarker_id, marker_latitude, marker_longitude, marker_type)\n" +
+                    "\tVALUES (4, 3, 3, 'a')";
+
+            try (Connection connection = DriverManager.getConnection("jdbc:postgresql://10.0.2.2:5432/postgres", "postgres", "1234")){
+                Statement statement = connection.createStatement();
+                statement.executeUpdate(sqlCommand);
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
 
             return data;
