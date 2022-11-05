@@ -21,6 +21,7 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.snackbar.Snackbar;
 import com.rengwuxian.materialedittext.MaterialEditText;
@@ -31,15 +32,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.lang.reflect.InvocationTargetException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
@@ -48,13 +43,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private ArrayList markerPoints= new ArrayList();
 
-    private Button button;
+    private Button buttonChangeMode;
 
     private RelativeLayout root;
 
     private boolean routeBuildingMode = false;
 
     private List<Route> routes = new ArrayList<>();
+
+    private Polyline polyline;
+
+    private List<Location> locationsWhenMapStarted;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,90 +66,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         root = findViewById(R.id.root_element);
 
-        button = findViewById(R.id.button);
+        buttonChangeMode = findViewById(R.id.button);
 
-        button.setOnClickListener(new View.OnClickListener() {
+        buttonChangeMode.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 changeMode();
             }
         });
-
-        //Database db = new Database();
-    }
-
-    private void changeMode(){
-        if(routeBuildingMode){
-            Snackbar.make(root, "Выход из режима оценки дороги", Snackbar.LENGTH_SHORT).show();
-            if (markerPoints.size() > 1) {
-                markerPoints.clear();
-                mMap.clear();
-            }
-            routeBuildingMode = false;
-        } else
-        {
-            Snackbar.make(root, "Отметьте две точки", Snackbar.LENGTH_SHORT).show();
-            routeBuildingMode = true;
-        }
-    }
-
-    private void showWindow(List<Location> locations){
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
-        dialog.setTitle("Оцените качество дороги");
-        dialog.setMessage("Оценка");
-
-        LayoutInflater inflater = LayoutInflater.from(this);
-        View register_window = inflater.inflate(R.layout.register_window, null);
-        dialog.setView(register_window);
-
-        final MaterialEditText ratingOfRoute = register_window.findViewById(R.id.ratingOfRouteField);
-        final MaterialEditText typeOfRoute = register_window.findViewById(R.id.typeOfRouteField);
-        final MaterialEditText commentOfRoute = register_window.findViewById(R.id.commemtField);
-
-        dialog.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                dialogInterface.dismiss();
-            }
-        });
-        dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
-
-            String rating;
-
-            String typeOfRoad;
-
-            String comment;
-
-            @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                if(TextUtils.isEmpty(ratingOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
-                } else{
-                    rating = ratingOfRoute.getText().toString();
-                }
-
-                if(TextUtils.isEmpty(typeOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
-                } else{
-                    typeOfRoad = typeOfRoute.getText().toString();
-                }
-
-                if(TextUtils.isEmpty(commentOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
-                } else{
-                    comment = commentOfRoute.getText().toString();
-                }
-
-                routes.add(new Route(locations,rating, typeOfRoad, comment));
-
-                Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
-            }
-        });
-
-        dialog.show();
     }
 
     /**
@@ -168,6 +91,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         LatLng sydney = new LatLng(-34, 151);
         //mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(sydney, 16));
+
+        SelectTaskLocations selectTaskLocations = new SelectTaskLocations();
+
+        selectTaskLocations.execute("AMOGUS");
 
         mMap.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
             @Override
@@ -228,17 +155,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 data = downloadUrl(url[0]);
             } catch (Exception e) {
                 Log.d("Background Task", e.toString());
-            }
-
-            String sqlCommand = "INSERT INTO streetline.marker_table(\n" +
-                    "\tmarker_id, marker_latitude, marker_longitude, marker_type)\n" +
-                    "\tVALUES (4, 3, 3, 'a')";
-
-            try (Connection connection = DriverManager.getConnection("jdbc:postgresql://10.0.2.2:5432/postgres", "postgres", "1234")){
-                Statement statement = connection.createStatement();
-                statement.executeUpdate(sqlCommand);
-            } catch (SQLException e) {
-                e.printStackTrace();
             }
 
             return data;
@@ -302,9 +218,20 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             lineOptions.geodesic(true);
 
             // Drawing polyline in the Google Map for the i-th route
-            mMap.addPolyline(lineOptions);
+            polyline = mMap.addPolyline(lineOptions);
 
-            showWindow(locations);
+            polyline.setClickable(true);
+
+            mMap.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener()
+            {
+                @Override
+                public void onPolylineClick(Polyline polyline)
+                {
+                    System.out.println(polyline.getTag());
+                }
+            });
+
+            showFormToRateRoute(locations);
         }
     }
 
@@ -360,5 +287,193 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             urlConnection.disconnect();
         }
         return data;
+    }
+
+    private void drawAllRoutes(List<Route> routes){
+
+//        List<Location> locations = new ArrayList<>();
+//
+//        List<LatLng>points = new ArrayList();
+//
+//        PolylineOptions lineOptions = new PolylineOptions();
+//
+//        for (int i = 0; i < locations.size(); i++) {
+//
+//            double lat = locations.get(i).latitude;
+//            double lng = locations.get(i).longitude;
+//            LatLng position = new LatLng(lat, lng);
+//
+//            points.add(position);
+//        }
+//
+//        lineOptions.addAll(points);
+//        lineOptions.width(12);
+//        lineOptions.color(Color.RED);
+//        lineOptions.geodesic(true);
+//
+//        // Drawing polyline in the Google Map for the i-th route
+//        polyline = mMap.addPolyline(lineOptions);
+//
+//        polyline.setClickable(true);
+//
+//        mMap.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener()
+//        {
+//            @Override
+//            public void onPolylineClick(Polyline polyline)
+//            {
+//                System.out.println(polyline.getTag());
+//            }
+//        });
+    }
+
+    private void changeMode(){
+        if(routeBuildingMode){
+            Snackbar.make(root, "Выход из режима оценки дороги", Snackbar.LENGTH_SHORT).show();
+            if (markerPoints.size() > 1) {
+                markerPoints.clear();
+                mMap.clear();
+            }
+            routeBuildingMode = false;
+        } else
+        {
+            Snackbar.make(root, "Отметьте две точки", Snackbar.LENGTH_SHORT).show();
+            routeBuildingMode = true;
+        }
+    }
+
+    private void showFormToRateRoute(List<Location> locations){
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
+        dialog.setTitle("Оцените качество дороги");
+        dialog.setMessage("Оценка");
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View register_window = inflater.inflate(R.layout.register_window, null);
+        dialog.setView(register_window);
+
+        final MaterialEditText ratingOfRoute = register_window.findViewById(R.id.ratingOfRouteField);
+        final MaterialEditText typeOfRoute = register_window.findViewById(R.id.typeOfRouteField);
+        final MaterialEditText commentOfRoute = register_window.findViewById(R.id.commemtField);
+
+        dialog.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+            }
+        });
+        dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
+
+            int rating;
+
+            String typeOfRoad;
+
+            String comment;
+
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                if(TextUtils.isEmpty(ratingOfRoute.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                } else{
+                    rating = Integer.parseInt(ratingOfRoute.getText().toString());
+                }
+
+                if(TextUtils.isEmpty(typeOfRoute.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                } else{
+                    typeOfRoad = typeOfRoute.getText().toString();
+                }
+
+                if(TextUtils.isEmpty(commentOfRoute.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                } else{
+                    comment = commentOfRoute.getText().toString();
+                }
+
+                Route route = new Route(locations,rating, typeOfRoad, comment);
+
+                routes.add(route);
+
+                polyline.setTag(route);
+
+                InsertTaskRoute insertTaskRoute = new InsertTaskRoute();
+
+                insertTaskRoute.execute(route);
+
+                InsertTaskLocations insertTaskLocations = new InsertTaskLocations();
+
+                insertTaskLocations.execute(locations);
+
+                Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
+            }
+        });
+
+        dialog.show();
+    }
+
+    private class InsertTaskRoute extends AsyncTask<Route, Void, Void> {
+
+        @Override
+        protected Void doInBackground(Route... routes) {
+
+            RouteDAO routeDAO = new RouteDAO();
+
+            routeDAO.insertRoute(routes[0]);
+
+            return null;
+        }
+    }
+
+    private class InsertTaskLocations extends AsyncTask<List<Location>, Void, Void> {
+
+        @Override
+        protected Void doInBackground(List<Location>... locations) {
+
+            RouteDAO routeDAO = new RouteDAO();
+
+            routeDAO.insertLocations(locations[0]);
+
+            return null;
+        }
+    }
+
+    private class SelectTaskLocations extends AsyncTask<String, List<Location>, List<Location>> {
+
+        @Override
+        protected List<Location> doInBackground(String... str) {
+
+            RouteDAO routeDAO = new RouteDAO();
+
+            routeDAO.selectAllLocations();
+
+            return routeDAO.selectAllLocations();
+        }
+
+        @Override
+        protected void onPostExecute(List<Location> locations) {
+
+            List<LatLng>points = new ArrayList();
+
+            PolylineOptions lineOptions = new PolylineOptions();
+
+            for (int i = 0; i < locations.size(); i++) {
+
+                //так оно и работает, где то меняеются местами долгота и широта
+                double lat = locations.get(i).longitude;
+                double lng = locations.get(i).latitude;
+                LatLng position = new LatLng(lat, lng);
+
+                points.add(position);
+            }
+
+            lineOptions.addAll(points);
+            lineOptions.width(12);
+            lineOptions.color(Color.RED);
+            lineOptions.geodesic(true);
+
+            // Drawing polyline in the Google Map for the i-th route
+            polyline = mMap.addPolyline(lineOptions);
+        }
     }
 }
