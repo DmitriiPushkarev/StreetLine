@@ -1,15 +1,14 @@
 package com.example.streetline;
 
-import com.google.android.gms.maps.model.Polyline;
-
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class Route {
 
-    private int id;
-
     private List<Location> locations = new ArrayList<>();
+
+    private String areaId;
 
     private int rating;
 
@@ -22,6 +21,15 @@ public class Route {
         this.rating = rating;
         this.typeOfRoad = typeOfRoad;
         this.comment = comment;
+        this.areaId = UUID.randomUUID().toString();
+    }
+
+    public Route(List<Location> locations, int rating, String typeOfRoad, String comment, String id) {
+        this.locations = locations;
+        this.rating = rating;
+        this.typeOfRoad = typeOfRoad;
+        this.comment = comment;
+        this.areaId = id;
     }
 
     public Route() {
@@ -42,6 +50,14 @@ public class Route {
         this.rating = route.getRating();
         this.typeOfRoad = route.typeOfRoad;
         this.comment = route.comment;
+    }
+
+    public String getAreaId() {
+        return areaId;
+    }
+
+    public void setAreaId(String areaId) {
+        this.areaId = areaId;
     }
 
     public List<Location> getLocations() {

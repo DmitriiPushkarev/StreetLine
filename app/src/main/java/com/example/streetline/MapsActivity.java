@@ -13,6 +13,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -51,9 +52,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private List<Route> routes = new ArrayList<>();
 
-    private Polyline polyline;
-
-    private List<Location> locationsWhenMapStarted;
+    private String currentId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -218,18 +217,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             lineOptions.geodesic(true);
 
             // Drawing polyline in the Google Map for the i-th route
-            polyline = mMap.addPolyline(lineOptions);
-
-            polyline.setClickable(true);
-
-            mMap.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener()
-            {
-                @Override
-                public void onPolylineClick(Polyline polyline)
-                {
-                    System.out.println(polyline.getTag());
-                }
-            });
+            mMap.addPolyline(lineOptions);
 
             showFormToRateRoute(locations);
         }
@@ -287,43 +275,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             urlConnection.disconnect();
         }
         return data;
-    }
-
-    private void drawAllRoutes(List<Route> routes){
-
-//        List<Location> locations = new ArrayList<>();
-//
-//        List<LatLng>points = new ArrayList();
-//
-//        PolylineOptions lineOptions = new PolylineOptions();
-//
-//        for (int i = 0; i < locations.size(); i++) {
-//
-//            double lat = locations.get(i).latitude;
-//            double lng = locations.get(i).longitude;
-//            LatLng position = new LatLng(lat, lng);
-//
-//            points.add(position);
-//        }
-//
-//        lineOptions.addAll(points);
-//        lineOptions.width(12);
-//        lineOptions.color(Color.RED);
-//        lineOptions.geodesic(true);
-//
-//        // Drawing polyline in the Google Map for the i-th route
-//        polyline = mMap.addPolyline(lineOptions);
-//
-//        polyline.setClickable(true);
-//
-//        mMap.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener()
-//        {
-//            @Override
-//            public void onPolylineClick(Polyline polyline)
-//            {
-//                System.out.println(polyline.getTag());
-//            }
-//        });
     }
 
     private void changeMode(){
@@ -395,13 +346,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
                 routes.add(route);
 
-                polyline.setTag(route);
+                //polyline.setTag(route);
 
                 InsertTaskRoute insertTaskRoute = new InsertTaskRoute();
 
                 insertTaskRoute.execute(route);
 
                 InsertTaskLocations insertTaskLocations = new InsertTaskLocations();
+
+                currentId = route.getAreaId();
 
                 insertTaskLocations.execute(locations);
 
@@ -432,16 +385,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             RouteDAO routeDAO = new RouteDAO();
 
-            routeDAO.insertLocations(locations[0]);
+            routeDAO.insertLocations(locations[0], currentId);
 
             return null;
         }
     }
 
-    private class SelectTaskLocations extends AsyncTask<String, List<Location>, List<Location>> {
+    private class SelectTaskLocations extends AsyncTask<String, List<Route>, List<Route>> {
 
         @Override
-        protected List<Location> doInBackground(String... str) {
+        protected List<Route> doInBackground(String... str) {
 
             RouteDAO routeDAO = new RouteDAO();
 
@@ -451,29 +404,76 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
 
         @Override
-        protected void onPostExecute(List<Location> locations) {
+        protected void onPostExecute(List<Route> allRoutes) {
 
-            List<LatLng>points = new ArrayList();
-
-            PolylineOptions lineOptions = new PolylineOptions();
-
-            for (int i = 0; i < locations.size(); i++) {
-
-                //так оно и работает, где то меняеются местами долгота и широта
-                double lat = locations.get(i).longitude;
-                double lng = locations.get(i).latitude;
-                LatLng position = new LatLng(lat, lng);
-
-                points.add(position);
+            for (int i = 0; i < allRoutes.size(); i++) {
+                drawLines(allRoutes.get(i));
             }
-
-            lineOptions.addAll(points);
-            lineOptions.width(12);
-            lineOptions.color(Color.RED);
-            lineOptions.geodesic(true);
-
-            // Drawing polyline in the Google Map for the i-th route
-            polyline = mMap.addPolyline(lineOptions);
         }
+    }
+
+    private void drawLines(Route route){
+
+        List<LatLng>points = new ArrayList();
+
+        PolylineOptions lineOptions = new PolylineOptions();
+
+        for (int i = 0; i < route.getLocations().size(); i++) {
+
+            //так оно и работает, где то меняеются местами долгота и широта
+            double lat = route.getLocations().get(i).longitude;
+            double lng = route.getLocations().get(i).latitude;
+            LatLng position = new LatLng(lat, lng);
+
+            points.add(position);
+        }
+
+        lineOptions.addAll(points);
+        lineOptions.width(12);
+        lineOptions.color(Color.RED);
+        lineOptions.geodesic(true);
+
+        // Drawing polyline in the Google Map for the i-th route
+        Polyline polyline = mMap.addPolyline(lineOptions);
+        polyline.setClickable(true);
+        polyline.setTag(route);
+
+        mMap.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener()
+        {
+            @Override
+            public void onPolylineClick(Polyline polyline)
+            {
+                Route route1 = (Route) polyline.getTag();
+                showInfo(route1);
+            }
+        });
+
+    }
+
+    private void showInfo(Route route){
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
+        dialog.setTitle("Информация о качестве дороги");
+        dialog.setMessage("Оценка");
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View info = inflater.inflate(R.layout.info, null);
+        dialog.setView(info);
+
+        final TextView ratingOfRoute = info.findViewById(R.id.rating);
+        final TextView typeOfRoute = info.findViewById(R.id.type_of_road);
+        final TextView commentOfRoute = info.findViewById(R.id.comment);
+
+        ratingOfRoute.setText(Integer.toString(route.getRating()));
+        typeOfRoute.setText(route.getTypeOfRoad());
+        commentOfRoute.setText(route.getComment());
+
+        dialog.setNegativeButton("Выход", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+            }
+        });
+
+        dialog.show();
     }
 }
