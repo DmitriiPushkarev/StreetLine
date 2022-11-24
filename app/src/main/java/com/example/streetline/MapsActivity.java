@@ -21,6 +21,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
@@ -37,6 +38,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
 
@@ -44,15 +46,25 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private ArrayList markerPoints= new ArrayList();
 
-    private Button buttonChangeMode;
+    private Button buttonChangeMarkerMode;
+
+    private Button buttonChangeRouteMode;
 
     private RelativeLayout root;
 
-    private boolean routeBuildingMode = false;
+    private boolean routeMode = false;
+
+    private boolean markerMode = false;
 
     private List<Route> routes = new ArrayList<>();
 
     private String currentId;
+
+    private Polyline currentPolyline;
+
+    private List<Polyline> allPolyline = new ArrayList<>();
+
+    private List<Marker> currentMarkers = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,12 +77,21 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         root = findViewById(R.id.root_element);
 
-        buttonChangeMode = findViewById(R.id.button);
+        buttonChangeMarkerMode = findViewById(R.id.button);
 
-        buttonChangeMode.setOnClickListener(new View.OnClickListener() {
+        buttonChangeMarkerMode.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                changeMode();
+                changeMarkerMode();
+            }
+        });
+
+        buttonChangeRouteMode = findViewById(R.id.buttonRouteMode);
+
+        buttonChangeRouteMode.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                changeRouteMode();
             }
         });
     }
@@ -87,9 +108,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-        LatLng sydney = new LatLng(-34, 151);
+        //LatLng sydney = new LatLng(-34, 151);
+        LatLng ekb = new LatLng(56.8519, 60.6122);
         //mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
-        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(sydney, 16));
+        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(ekb, 16));
 
         SelectTaskLocations selectTaskLocations = new SelectTaskLocations();
 
@@ -99,11 +121,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onMapClick(LatLng latLng) {
 
-                if(routeBuildingMode) {
+                if(routeMode) {
 
                     if (markerPoints.size() > 1) {
                         markerPoints.clear();
-                        mMap.clear();
+                        for (int i = 0; i < currentMarkers.size(); i++) {
+                            currentMarkers.get(i).remove();
+                        }
+                        //mMap.clear();
                     }
 
                     // Adding new item to the ArrayList
@@ -122,7 +147,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                     }
 
                     // Add new marker to the Google Map Android API V2
-                    mMap.addMarker(options);
+                    Marker marker = mMap.addMarker(options);
+                    currentMarkers.add(marker);
 
                     // Checks, whether start and end locations are captured
                     if (markerPoints.size() >= 2) {
@@ -217,7 +243,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             lineOptions.geodesic(true);
 
             // Drawing polyline in the Google Map for the i-th route
-            mMap.addPolyline(lineOptions);
+            currentPolyline = mMap.addPolyline(lineOptions);
 
             showFormToRateRoute(locations);
         }
@@ -277,18 +303,40 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         return data;
     }
 
-    private void changeMode(){
-        if(routeBuildingMode){
+    private void changeMarkerMode(){
+        if(routeMode){
             Snackbar.make(root, "Выход из режима оценки дороги", Snackbar.LENGTH_SHORT).show();
-            if (markerPoints.size() > 1) {
+            if (markerPoints.size() > 0) {
                 markerPoints.clear();
-                mMap.clear();
+                for (int i = 0; i < currentMarkers.size(); i++) {
+                    currentMarkers.get(i).remove();
+                }
+                //mMap.clear();
             }
-            routeBuildingMode = false;
+            routeMode = false;
         } else
         {
             Snackbar.make(root, "Отметьте две точки", Snackbar.LENGTH_SHORT).show();
-            routeBuildingMode = true;
+            routeMode = true;
+        }
+    }
+
+    private void changeRouteMode(){
+        if(markerMode){
+            Snackbar.make(root, "Выход из поиска пути", Snackbar.LENGTH_SHORT).show();
+            for (int i = 0; i < allPolyline.size(); i++) {
+                allPolyline.get(i).setVisible(true);
+                allPolyline.get(i).setClickable(true);
+            }
+            markerMode = false;
+        } else
+        {
+            Snackbar.make(root, "Отметьте две точки", Snackbar.LENGTH_SHORT).show();
+            for (int i = 0; i < allPolyline.size(); i++) {
+                allPolyline.get(i).setVisible(false);
+                allPolyline.get(i).setClickable(false);
+            }
+            markerMode = true;
         }
     }
 
@@ -298,7 +346,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         dialog.setMessage("Оценка");
 
         LayoutInflater inflater = LayoutInflater.from(this);
-        View register_window = inflater.inflate(R.layout.register_window, null);
+        View register_window = inflater.inflate(R.layout.rating_window, null);
         dialog.setView(register_window);
 
         final MaterialEditText ratingOfRoute = register_window.findViewById(R.id.ratingOfRouteField);
@@ -309,6 +357,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
                 dialogInterface.dismiss();
+                currentPolyline.remove();
+                for (int j = 0; j < currentMarkers.size(); j++) {
+                    currentMarkers.get(j).remove();
+                }
             }
         });
         dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
@@ -428,15 +480,35 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             points.add(position);
         }
 
+        int rating = route.getRating();
+
         lineOptions.addAll(points);
         lineOptions.width(12);
-        lineOptions.color(Color.RED);
+        switch (rating){
+            case (1):
+                lineOptions.color(Color.parseColor("#FF0000"));
+                break;
+            case (2):
+                lineOptions.color(Color.parseColor("#FF8C00"));
+                break;
+            case (3):
+                lineOptions.color(Color.parseColor("#FFFF00"));
+                break;
+            case (4):
+                lineOptions.color(Color.parseColor("#ADFF2F"));
+                break;
+            case (5):
+                lineOptions.color(Color.parseColor("#32CD32"));
+                break;
+        }
         lineOptions.geodesic(true);
 
         // Drawing polyline in the Google Map for the i-th route
         Polyline polyline = mMap.addPolyline(lineOptions);
         polyline.setClickable(true);
         polyline.setTag(route);
+
+        allPolyline.add(polyline);
 
         mMap.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener()
         {
@@ -450,7 +522,33 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     }
 
+
+    private class SelectTaskAvg extends AsyncTask<Route, Void, Double> {
+
+        @Override
+        protected Double doInBackground(Route... routes) {
+
+            RouteDAO routeDAO = new RouteDAO();
+
+            routeDAO.selectAvgScoreOfRoute(routes[0]);
+
+            return routes[0].getAvgScore();
+        }
+
+    }
+
     private void showInfo(Route route){
+
+        SelectTaskAvg selectTaskAvg = new SelectTaskAvg();
+
+        try {
+            selectTaskAvg.execute(route).get();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+
         AlertDialog.Builder dialog = new AlertDialog.Builder(this);
         dialog.setTitle("Информация о качестве дороги");
         dialog.setMessage("Оценка");
@@ -463,7 +561,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         final TextView typeOfRoute = info.findViewById(R.id.type_of_road);
         final TextView commentOfRoute = info.findViewById(R.id.comment);
 
-        ratingOfRoute.setText(Integer.toString(route.getRating()));
+        ratingOfRoute.setText(Double.toString(route.getAvgScore()));
         typeOfRoute.setText(route.getTypeOfRoad());
         commentOfRoute.setText(route.getComment());
 
@@ -471,6 +569,76 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onClick(DialogInterface dialogInterface, int i) {
                 dialogInterface.dismiss();
+            }
+        });
+
+        dialog.setPositiveButton("Добавить оценку дороги", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                showFormToRateOtherRoute(route.getAreaId());
+            }
+        });
+
+        dialog.show();
+    }
+
+    private void showFormToRateOtherRoute(String areaId){
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
+        dialog.setTitle("Оцените качество дороги");
+        dialog.setMessage("Оценка");
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View register_window = inflater.inflate(R.layout.rating_window, null);
+        dialog.setView(register_window);
+
+        final MaterialEditText ratingOfRoute = register_window.findViewById(R.id.ratingOfRouteField);
+        final MaterialEditText typeOfRoute = register_window.findViewById(R.id.typeOfRouteField);
+        final MaterialEditText commentOfRoute = register_window.findViewById(R.id.commemtField);
+
+        dialog.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+            }
+        });
+        dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
+
+            int rating;
+
+            String typeOfRoad;
+
+            String comment;
+
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                if(TextUtils.isEmpty(ratingOfRoute.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                } else{
+                    rating = Integer.parseInt(ratingOfRoute.getText().toString());
+                }
+
+                if(TextUtils.isEmpty(typeOfRoute.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                } else{
+                    typeOfRoad = typeOfRoute.getText().toString();
+                }
+
+                if(TextUtils.isEmpty(commentOfRoute.getText().toString())){
+                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
+                    return;
+                } else{
+                    comment = commentOfRoute.getText().toString();
+                }
+
+                Route route = new Route(rating, typeOfRoad, comment, areaId);
+
+                InsertTaskRoute insertTaskRoute = new InsertTaskRoute();
+
+                insertTaskRoute.execute(route);
+
+                Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
             }
         });
 

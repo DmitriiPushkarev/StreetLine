@@ -27,6 +27,8 @@ public class RouteDAO {
             "\tFROM streetline.rating_table JOIN streetline.area_table \n" +
             "\tON rating_table.area_id = area_table.area_id;";
 
+    private static final String SQL_QUERY_SELECT_AVG_SCORE_OF_ROUTE = "SELECT AVG(score) FROM streetline.rating_table where area_id = (?)";
+
     //CHANGE ID USER AND AREA!!!
     public void insertRoute(Route route) {
 
@@ -88,5 +90,21 @@ public class RouteDAO {
         }
 
         return routes;
+    }
+
+    public void selectAvgScoreOfRoute(Route route) {
+
+        double avgScore = 0;
+        try (Connection connection = DriverManager.getConnection(URL, USERNAME, PASSWORD)){
+            PreparedStatement preparedStatement = connection.prepareStatement(SQL_QUERY_SELECT_AVG_SCORE_OF_ROUTE);
+            preparedStatement.setString(1, route.getAreaId());
+            ResultSet resultSet = preparedStatement.executeQuery();
+            while(resultSet.next()) {
+                avgScore = resultSet.getDouble("avg");
+                route.setAvgScore(avgScore);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 }

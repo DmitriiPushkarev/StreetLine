@@ -16,6 +16,8 @@ public class Route {
 
     private String comment;
 
+    private double avgScore;
+
     public Route(List<Location> locations, int rating, String typeOfRoad, String comment) {
         this.locations = locations;
         this.rating = rating;
@@ -26,6 +28,13 @@ public class Route {
 
     public Route(List<Location> locations, int rating, String typeOfRoad, String comment, String id) {
         this.locations = locations;
+        this.rating = rating;
+        this.typeOfRoad = typeOfRoad;
+        this.comment = comment;
+        this.areaId = id;
+    }
+
+    public Route(int rating, String typeOfRoad, String comment, String id) {
         this.rating = rating;
         this.typeOfRoad = typeOfRoad;
         this.comment = comment;
@@ -50,6 +59,14 @@ public class Route {
         this.rating = route.getRating();
         this.typeOfRoad = route.typeOfRoad;
         this.comment = route.comment;
+    }
+
+    public double getAvgScore() {
+        return avgScore;
+    }
+
+    public void setAvgScore(double avgScore) {
+        this.avgScore = avgScore;
     }
 
     public String getAreaId() {
