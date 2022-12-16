@@ -2,7 +2,7 @@
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     app:cardElevation="10dp">
 
     <LinearLayout
@@ -11,25 +11,11 @@
         android:layout_margin="20dp"
         android:orientation="vertical">
 
-        <RatingBar
-            android:id="@+id/ratingBar"
-            style="?android:attr/ratingBarStyle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="#FFF7AE"
-            android:contentDescription="@string/app_name"
-            android:indeterminateTint="#FFF7AE"
-            android:numStars="5"
-            android:progressBackgroundTint="#FFF7AE"
-            android:progressTint="#FFEB3B"
-            android:secondaryProgressTint="#FFF7AE"
-            android:stepSize="1" />
-
         <com.rengwuxian.materialedittext.MaterialEditText
-            android:id="@+id/typeOfRouteField"
+            android:id="@+id/login"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Тип дороги"
+            android:hint="Логин"
             android:inputType="textShortMessage"
             android:text=""
             android:textColor="@color/primary_dark_material_light"
@@ -42,11 +28,11 @@
             app:met_singleLineEllipsis="true" />
 
         <com.rengwuxian.materialedittext.MaterialEditText
-            android:id="@+id/commemtField"
+            android:id="@+id/password"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Комментарий"
-            android:inputType="textShortMessage"
+            android:hint="Пароль"
+            android:inputType="textPassword"
             android:text=""
             android:textColor="@color/primary_dark_material_light"
 
@@ -56,7 +42,6 @@
             app:met_floatingLabel="highlight"
             app:met_primaryColor="#982360"
             app:met_singleLineEllipsis="true" />
-
 
     </LinearLayout>
 

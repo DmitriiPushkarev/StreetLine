@@ -18,6 +18,12 @@ public class Route {
 
     private double avgScore;
 
+    private String login;
+
+    private String userId;
+
+    private String userName;
+
     public Route(List<Location> locations, int rating, String typeOfRoad, String comment) {
         this.locations = locations;
         this.rating = rating;
@@ -26,7 +32,8 @@ public class Route {
         this.areaId = UUID.randomUUID().toString();
     }
 
-    public Route(List<Location> locations, int rating, String typeOfRoad, String comment, String id) {
+    public Route(String login, List<Location> locations, int rating, String typeOfRoad, String comment, String id) {
+        this.login = login;
         this.locations = locations;
         this.rating = rating;
         this.typeOfRoad = typeOfRoad;
@@ -41,16 +48,38 @@ public class Route {
         this.areaId = id;
     }
 
+    public Route(List<Location> locations, String areaId, int rating, String typeOfRoad, String comment, String userId, String userName) {
+        this.locations = locations;
+        this.areaId = areaId;
+        this.rating = rating;
+        this.typeOfRoad = typeOfRoad;
+        this.comment = comment;
+        this.userId = userId;
+        this.userName = userName;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
     public Route() {
     }
 
     @Override
     public String toString() {
         return "Route{" +
-                "locations=" + locations +
-                ", rating='" + rating + '\'' +
+                "locations=" + locations + '\n' +
+                ", areaId='" + areaId + '\'' +
+                ", rating=" + rating +
                 ", typeOfRoad='" + typeOfRoad + '\'' +
                 ", comment='" + comment + '\'' +
+                ", avgScore=" + avgScore +
+                ", login='" + login + '\'' +
+                ", userId='" + userId + '\'' +
                 '}';
     }
 
@@ -59,6 +88,22 @@ public class Route {
         this.rating = route.getRating();
         this.typeOfRoad = route.typeOfRoad;
         this.comment = route.comment;
+    }
+
+    public String getUserName() {
+        return userName;
+    }
+
+    public void setUserName(String userName) {
+        this.userName = userName;
+    }
+
+    public String getLogin() {
+        return login;
+    }
+
+    public void setLogin(String login) {
+        this.login = login;
     }
 
     public double getAvgScore() {

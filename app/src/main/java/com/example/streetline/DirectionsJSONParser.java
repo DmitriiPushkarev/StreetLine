@@ -11,10 +11,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-
-/**
- * Created by anupamchugh on 27/11/15.
- */
+import java.util.UUID;
 
 public class DirectionsJSONParser {
 
@@ -24,11 +21,7 @@ public class DirectionsJSONParser {
         List<Location> locations = new ArrayList<>();
 
         try {
-            JSONArray arr1 = jObject.getJSONArray("routes");
-
-            JSONArray arr = decodeGeometry(arr1.getJSONObject(0).getString("geometry"), false);
-
-            decodeGeometry(arr1.getJSONObject(0).getString("geometry"), false);
+            JSONArray arr = jObject.getJSONArray("route");
 
             String location = "";
 
@@ -36,13 +29,11 @@ public class DirectionsJSONParser {
             {
                 location = arr.getString(i);
 
-                System.out.println(arr.getString(i));
-
                 int firstPoint = location.indexOf(',');
 
-                double latitude = Double.parseDouble(location.substring(1,firstPoint));
+                double longitude = Double.parseDouble(location.substring(1,firstPoint));
 
-                double longitude = Double.parseDouble(location.substring(firstPoint+1, location.length() - 1));
+                double latitude = Double.parseDouble(location.substring(firstPoint+1, location.length() - 1));
 
                 Location objLocation = new Location(longitude, latitude);
 
@@ -85,6 +76,38 @@ public class DirectionsJSONParser {
 
         return locations;
     }
+
+    public List<Location> parseStringToLocationsApi(String str){
+
+        List<Location> locations = new ArrayList<>();
+
+        try {
+
+            JSONArray arr = new JSONArray(str);
+
+            String location = "";
+
+            for (int i = 0; i < arr.length(); i++)
+            {
+                location = arr.getString(i);
+
+                int firstPoint = location.indexOf(',');
+
+                double longitude = Double.parseDouble(location.substring(1,firstPoint));
+
+                double latitude = Double.parseDouble(location.substring(firstPoint+1, location.length() - 1));
+
+                Location objLocation = new Location(longitude, latitude);
+
+                locations.add(objLocation);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+
+        return locations;
+    }
+
 
     public static JSONArray decodeGeometry(String encodedGeometry, boolean inclElevation) {
         JSONArray geometry = new JSONArray();
@@ -140,5 +163,35 @@ public class DirectionsJSONParser {
         }
 
         return geometry;
+    }
+
+    public List<Route> parseRouteJSON(JSONArray jsonArray) {
+        List<Route> routes = new ArrayList<>();
+        for (int i = 0; i < jsonArray.length(); i++) {
+            try {
+                JSONObject jsonRating = jsonArray.getJSONObject(i);
+                JSONObject jsonSegment = jsonRating.getJSONObject("segment");
+
+
+                String arrayStrSegment = jsonSegment.getString("segment");
+                arrayStrSegment = arrayStrSegment.replaceAll("\\s+","");
+                List<Location> locations = parseStringToLocationsApi(arrayStrSegment);
+
+                String areaId = jsonSegment.getString("id");
+                int rating = jsonRating.getInt("score");
+                String typeOfRoad = jsonRating.getString("type");
+                String comment = jsonRating.getString("comment");
+                String userId = jsonRating.getJSONObject("creator").getString("id");
+                String userName = jsonRating.getJSONObject("creator").getString("username");
+
+                Route route = new Route(locations,areaId,rating,typeOfRoad,comment,userId,userName);
+                routes.add(route);
+
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+
+        return routes;
     }
 }

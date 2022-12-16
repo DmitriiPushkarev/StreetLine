@@ -15,22 +15,36 @@
             android:id="@+id/rating"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="TextView"
+            android:text="Score"
+            android:textSize="20sp" />
+
+        <TextView
+            android:id="@+id/login"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Login"
             android:textSize="20sp" />
 
         <TextView
             android:id="@+id/type_of_road"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="TextView"
+            android:text="TypeOfRoad"
             android:textSize="20sp" />
 
         <TextView
             android:id="@+id/comment"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="TextView"
+            android:text="Comment"
             android:textSize="20sp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerview"
+            android:layout_width="match_parent"
+            android:layout_height="100dp">
+
+        </androidx.recyclerview.widget.RecyclerView>
 
     </LinearLayout>
 

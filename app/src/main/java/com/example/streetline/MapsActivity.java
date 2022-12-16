@@ -1,9 +1,13 @@
 package com.example.streetline;
 
 import androidx.fragment.app.FragmentActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.AlertDialog;
-import android.content.DialogInterface;
+import android.content.SharedPreferences;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.graphics.Color;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -12,6 +16,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.widget.Button;
+import android.widget.RatingBar;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
@@ -28,6 +33,8 @@ import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.material.snackbar.Snackbar;
 import com.rengwuxian.materialedittext.MaterialEditText;
 
+import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
@@ -52,9 +59,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private RelativeLayout root;
 
-    private boolean routeMode = false;
-
     private boolean markerMode = false;
+
+    private boolean routeMode = false;
 
     private List<Route> routes = new ArrayList<>();
 
@@ -65,6 +72,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private List<Polyline> allPolyline = new ArrayList<>();
 
     private List<Marker> currentMarkers = new ArrayList<>();
+
+    static final String SAVE_LOGIN = "save_login";
+
+    static final String SAVE_PASSWORD = "save_password";
+
+    static final String SAVE_USERID = "save_userid";
+
+    private String login;
+
+    private String password;
+
+    private String userid;
+
+    private SharedPreferences prefs = null;
+
+    private Object lock = new Object();
+
+    private DBHelper dbHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -94,6 +119,39 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 changeRouteMode();
             }
         });
+
+        prefs = getSharedPreferences("com.example.streetline", MODE_PRIVATE);
+
+        //prefs.edit().remove("firstrun").commit();
+
+        System.out.println(getSharedPreferences("setting",MODE_PRIVATE).getString(SAVE_LOGIN, ""));
+        System.out.println(getSharedPreferences("setting",MODE_PRIVATE).getString(SAVE_PASSWORD, ""));
+        System.out.println(getSharedPreferences("setting",MODE_PRIVATE).getString(SAVE_USERID, ""));
+        System.out.println(prefs.getBoolean("firstrun", false));
+
+        if (!prefs.getBoolean("firstrun", false)) {
+            loadSettings();
+        }
+        dbHelper = new DBHelper(this);
+
+        SQLiteDatabase database = dbHelper.getWritableDatabase();
+
+        //dbHelper.dropALl(database);
+
+        //dbHelper.onCreate(database);
+
+        //NULL В ЭТИХ СОХРАНИТЬ НАСТРОЙКИ
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (prefs.getBoolean("firstrun", true)) {
+            GetBDFromApiTask getBDFromApiTask = new GetBDFromApiTask();
+            getBDFromApiTask.execute("get");
+            showRegistrationForm();
+        }
     }
 
     /**
@@ -108,9 +166,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-        //LatLng sydney = new LatLng(-34, 151);
-        LatLng ekb = new LatLng(56.8519, 60.6122);
-        //mMap.addMarker(new MarkerOptions().position(sydney).title("Marker in Sydney"));
+        LatLng ekb = new LatLng(56.8383, 60.6036);
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(ekb, 16));
 
         SelectTaskLocations selectTaskLocations = new SelectTaskLocations();
@@ -121,14 +177,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             @Override
             public void onMapClick(LatLng latLng) {
 
-                if(routeMode) {
+                if(markerMode || routeMode) {
 
                     if (markerPoints.size() > 1) {
                         markerPoints.clear();
                         for (int i = 0; i < currentMarkers.size(); i++) {
                             currentMarkers.get(i).remove();
                         }
-                        //mMap.clear();
+                        currentPolyline.remove();
                     }
 
                     // Adding new item to the ArrayList
@@ -161,12 +217,78 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         DownloadTask downloadTask = new DownloadTask();
 
                         // Start downloading json data from Google Directions API
-
                         downloadTask.execute(url);
                     }
                 }
             }
         });
+    }
+
+    private class GetBDFromApiTask extends AsyncTask<String, Void, Void> {
+
+        @Override
+        protected Void doInBackground(String... str) {
+
+            String data = "";
+
+            InputStream iStream = null;
+            HttpURLConnection urlConnection = null;
+
+            try {
+                URL url = new URL("http://92.255.79.73:8080/api/new");
+
+                urlConnection = (HttpURLConnection) url.openConnection();
+
+                urlConnection.setRequestMethod("GET");
+
+                urlConnection.connect();
+
+                iStream = urlConnection.getInputStream();
+
+                BufferedReader br = new BufferedReader(new InputStreamReader(iStream));
+
+                StringBuffer sb = new StringBuffer();
+
+                String line = "";
+                while ((line = br.readLine()) != null) {
+                    sb.append(line);
+                }
+
+                data = sb.toString();
+
+                br.close();
+
+            } catch (Exception e) {
+                Log.d("Exception", e.toString());
+            } finally {
+                urlConnection.disconnect();
+            }
+
+            try {
+                JSONArray jsonArray= new JSONArray(data);
+                DirectionsJSONParser directionsJSONParser = new DirectionsJSONParser();
+
+                List<Route> routes = directionsJSONParser.parseRouteJSON(jsonArray);
+
+                List<Integer> integers = new ArrayList<>();
+
+                for (int i = 0; i < routes.size(); i++) {
+                    RouteDAO routeDAO = new RouteDAO(routes.get(i).getUserId(),dbHelper);
+
+                    if(!integers.contains(Integer.parseInt(routes.get(i).getAreaId()))) {
+                        routeDAO.insertLocations(routes.get(i).getLocations(), routes.get(i).getAreaId());
+                    }
+
+                    integers.add(Integer.parseInt(routes.get(i).getAreaId()));
+
+                    routeDAO.insertRouteFromApi(routes.get(i));
+                }
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+
+            return null;
+        }
     }
 
     private class DownloadTask extends AsyncTask<String, Void, String> {
@@ -210,6 +332,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             List<Location> routes = null;
 
             try {
+                StringBuffer stringBuffer = new StringBuffer(jsonData[0]);
+                stringBuffer.deleteCharAt(stringBuffer.length()-2);
+                stringBuffer.deleteCharAt(9);
+                jsonData[0] = stringBuffer.toString();
                 jObject = new JSONObject(jsonData[0]);
                 DirectionsJSONParser parser = new DirectionsJSONParser();
 
@@ -245,21 +371,30 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             // Drawing polyline in the Google Map for the i-th route
             currentPolyline = mMap.addPolyline(lineOptions);
 
-            showFormToRateRoute(locations);
+            if(markerMode) {
+                showFormToRateRoute(locations);
+            }
         }
     }
 
     private String getDirectionsUrl(LatLng origin, LatLng dest) {
 
         // Origin of route
-        String str_origin = origin.longitude + "," + origin.latitude;
+        String str_origin = origin.latitude + "," + origin.longitude;
 
         // Destination of route
-        String str_dest = dest.longitude + "," + dest.latitude;
+        String str_dest = dest.latitude + "," + dest.longitude;
 
         // Building the url to the web service
-        String url = "https://router.project-osrm.org/route/v1/driving/" + str_origin + ";" +
-                str_dest + "?alternatives=true&geometries=polyline";
+        String url = "";
+
+        if(markerMode) {
+            url = "http://92.255.79.73:8080/api/segment/" + str_origin + "," + str_dest;
+        }
+        if(routeMode){
+            url = "http://92.255.79.73:8080/api/navigation/" + str_origin + "," + str_dest;
+        }
+
 
         return url;
     }
@@ -304,7 +439,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     private void changeMarkerMode(){
-        if(routeMode){
+        if(markerMode){
             Snackbar.make(root, "Выход из режима оценки дороги", Snackbar.LENGTH_SHORT).show();
             if (markerPoints.size() > 0) {
                 markerPoints.clear();
@@ -313,57 +448,90 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 }
                 //mMap.clear();
             }
-            routeMode = false;
+            markerMode = false;
         } else
         {
-            Snackbar.make(root, "Отметьте две точки", Snackbar.LENGTH_SHORT).show();
-            routeMode = true;
+            Snackbar.make(root, "Отметьте две точки для оценки дороги", 4000).show();
+            markerMode = true;
+            routeMode = false;
+            for (int i = 0; i < allPolyline.size(); i++) {
+                allPolyline.get(i).setVisible(true);
+                allPolyline.get(i).setClickable(true);
+            }
+            markerPoints.clear();
+            for (int i = 0; i < currentMarkers.size(); i++) {
+                currentMarkers.get(i).remove();
+            }
+            if(currentPolyline != null) {
+                currentPolyline.remove();
+            }
         }
     }
 
     private void changeRouteMode(){
-        if(markerMode){
+        if(routeMode){
             Snackbar.make(root, "Выход из поиска пути", Snackbar.LENGTH_SHORT).show();
             for (int i = 0; i < allPolyline.size(); i++) {
                 allPolyline.get(i).setVisible(true);
                 allPolyline.get(i).setClickable(true);
             }
-            markerMode = false;
+            routeMode = false;
+            markerPoints.clear();
+            for (int i = 0; i < currentMarkers.size(); i++) {
+                currentMarkers.get(i).remove();
+            }
+            if(currentPolyline != null) {
+                currentPolyline.remove();
+            }
         } else
         {
-            Snackbar.make(root, "Отметьте две точки", Snackbar.LENGTH_SHORT).show();
+            Snackbar.make(root, "Отметьте две точки для построения маршрута", 4000).show();
             for (int i = 0; i < allPolyline.size(); i++) {
                 allPolyline.get(i).setVisible(false);
                 allPolyline.get(i).setClickable(false);
             }
-            markerMode = true;
+            routeMode = true;
+            markerMode = false;
         }
     }
 
     private void showFormToRateRoute(List<Location> locations){
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
-        dialog.setTitle("Оцените качество дороги");
-        dialog.setMessage("Оценка");
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Оцените качество дороги")
+                .setMessage("Оценка")
+                .setPositiveButton(android.R.string.ok, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
 
         LayoutInflater inflater = LayoutInflater.from(this);
         View register_window = inflater.inflate(R.layout.rating_window, null);
         dialog.setView(register_window);
 
-        final MaterialEditText ratingOfRoute = register_window.findViewById(R.id.ratingOfRouteField);
+        dialog.show();
+
+        Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+
+        positiveButton.setText("Отправить");
+        negativeButton.setText("Отменить");
+
+        final RatingBar ratingOfRoute = register_window.findViewById(R.id.ratingBar);
         final MaterialEditText typeOfRoute = register_window.findViewById(R.id.typeOfRouteField);
         final MaterialEditText commentOfRoute = register_window.findViewById(R.id.commemtField);
 
-        dialog.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
+        negativeButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                dialogInterface.dismiss();
+            public void onClick(View view) {
+                dialog.dismiss();
                 currentPolyline.remove();
                 for (int j = 0; j < currentMarkers.size(); j++) {
                     currentMarkers.get(j).remove();
                 }
             }
         });
-        dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
+
+        positiveButton.setOnClickListener(new View.OnClickListener() {
 
             int rating;
 
@@ -372,49 +540,49 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             String comment;
 
             @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                if(TextUtils.isEmpty(ratingOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
+            public void onClick(View view) {
+                if(ratingOfRoute.getRating()==0 ||
+                        TextUtils.isEmpty(typeOfRoute.getText().toString()) ||
+                        TextUtils.isEmpty(commentOfRoute.getText().toString())){
+                    Snackbar.make(view, "Ошибка, заполните все данные", Snackbar.LENGTH_SHORT).show();
                 } else{
-                    rating = Integer.parseInt(ratingOfRoute.getText().toString());
-                }
-
-                if(TextUtils.isEmpty(typeOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
-                } else{
+                    rating = (int)ratingOfRoute.getRating();
                     typeOfRoad = typeOfRoute.getText().toString();
-                }
-
-                if(TextUtils.isEmpty(commentOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
-                } else{
                     comment = commentOfRoute.getText().toString();
+
+                    Route route = new Route(locations,rating, typeOfRoad, comment);
+
+                    routes.add(route);
+
+                    InsertTaskRoute insertTaskRoute = new InsertTaskRoute();
+
+                    InsertTaskLocations insertTaskLocations = new InsertTaskLocations();
+
+                    currentId = route.getAreaId();
+
+                    insertTaskLocations.execute(locations);
+
+                    insertTaskRoute.execute(route);
+
+                    Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
+
+                    markerPoints.clear();
+                    for (int j = 0; j < currentMarkers.size(); j++) {
+                        currentMarkers.get(j).remove();
+                    }
+                    if(currentPolyline != null) {
+                        currentPolyline.remove();
+                    }
+
+                    SelectTaskLocations selectTaskLocations = new SelectTaskLocations();
+
+                    selectTaskLocations.execute("AMOGUS");
+
+                    dialog.dismiss();
                 }
 
-                Route route = new Route(locations,rating, typeOfRoad, comment);
-
-                routes.add(route);
-
-                //polyline.setTag(route);
-
-                InsertTaskRoute insertTaskRoute = new InsertTaskRoute();
-
-                insertTaskRoute.execute(route);
-
-                InsertTaskLocations insertTaskLocations = new InsertTaskLocations();
-
-                currentId = route.getAreaId();
-
-                insertTaskLocations.execute(locations);
-
-                Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
             }
         });
-
-        dialog.show();
     }
 
     private class InsertTaskRoute extends AsyncTask<Route, Void, Void> {
@@ -422,7 +590,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         protected Void doInBackground(Route... routes) {
 
-            RouteDAO routeDAO = new RouteDAO();
+            RouteDAO routeDAO = new RouteDAO(userid,dbHelper);
 
             routeDAO.insertRoute(routes[0]);
 
@@ -435,7 +603,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         protected Void doInBackground(List<Location>... locations) {
 
-            RouteDAO routeDAO = new RouteDAO();
+            RouteDAO routeDAO = new RouteDAO(userid,dbHelper);
 
             routeDAO.insertLocations(locations[0], currentId);
 
@@ -448,7 +616,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         protected List<Route> doInBackground(String... str) {
 
-            RouteDAO routeDAO = new RouteDAO();
+            RouteDAO routeDAO = new RouteDAO(userid,dbHelper);
 
             routeDAO.selectAllLocations();
 
@@ -528,7 +696,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         @Override
         protected Double doInBackground(Route... routes) {
 
-            RouteDAO routeDAO = new RouteDAO();
+            RouteDAO routeDAO = new RouteDAO(userid, dbHelper);
 
             routeDAO.selectAvgScoreOfRoute(routes[0]);
 
@@ -549,59 +717,118 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             e.printStackTrace();
         }
 
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
-        dialog.setTitle("Информация о качестве дороги");
-        dialog.setMessage("Оценка");
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Информация о качестве дороги")
+                .setMessage("Оценка")
+                .setPositiveButton(android.R.string.ok, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
 
         LayoutInflater inflater = LayoutInflater.from(this);
         View info = inflater.inflate(R.layout.info, null);
         dialog.setView(info);
 
+        dialog.show();
+
         final TextView ratingOfRoute = info.findViewById(R.id.rating);
+        final TextView login = info.findViewById(R.id.login);
         final TextView typeOfRoute = info.findViewById(R.id.type_of_road);
         final TextView commentOfRoute = info.findViewById(R.id.comment);
 
-        ratingOfRoute.setText(Double.toString(route.getAvgScore()));
-        typeOfRoute.setText(route.getTypeOfRoad());
-        commentOfRoute.setText(route.getComment());
+        login.setText("Пользователь: " + route.getLogin());
+        ratingOfRoute.setText("Оценка: " +(int)route.getAvgScore());
+        typeOfRoute.setText("Тип дороги: " + route.getTypeOfRoad());
+        commentOfRoute.setText("Комментарий: " +route.getComment());
 
-        dialog.setNegativeButton("Выход", new DialogInterface.OnClickListener() {
+        Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
+
+        positiveButton.setText("Добавить оценку дороги");
+        negativeButton.setText("Выход");
+
+        negativeButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                dialogInterface.dismiss();
+            public void onClick(View view) {
+                dialog.dismiss();
             }
         });
 
-        dialog.setPositiveButton("Добавить оценку дороги", new DialogInterface.OnClickListener() {
+        positiveButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
+            public void onClick(View view) {
                 showFormToRateOtherRoute(route.getAreaId());
+                dialog.dismiss();
             }
         });
 
-        dialog.show();
+        SelectTaskInfo selectTaskInfo = new SelectTaskInfo();
+        selectTaskInfo.execute(route);
+
+        synchronized (lock) {
+            try {
+                lock.wait();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        List<RouteInfoUtility> infoList = selectTaskInfo.infoListTask;
+        RecyclerView recyclerView = info.findViewById(R.id.recyclerview);
+
+        recyclerView.setLayoutManager(new LinearLayoutManager(this));
+        recyclerView.setAdapter(new Adapter(getApplicationContext(),infoList));
+    }
+
+    private class SelectTaskInfo extends AsyncTask<Route, Void, Void> {
+
+        public List<RouteInfoUtility> infoListTask;
+
+        @Override
+        protected Void doInBackground(Route... routes) {
+
+            RouteDAO routeDAO = new RouteDAO(dbHelper);
+
+            infoListTask = routeDAO.selectInfoOfRoute(routes[0]);
+
+            synchronized (lock){
+                lock.notify();
+            }
+
+            return null;
+        }
     }
 
     private void showFormToRateOtherRoute(String areaId){
-        AlertDialog.Builder dialog = new AlertDialog.Builder(this);
-        dialog.setTitle("Оцените качество дороги");
-        dialog.setMessage("Оценка");
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Оцените качество дороги")
+                .setMessage("Оценка")
+                .setPositiveButton(android.R.string.ok, null)
+                .setNegativeButton(android.R.string.cancel, null)
+                .create();
 
         LayoutInflater inflater = LayoutInflater.from(this);
-        View register_window = inflater.inflate(R.layout.rating_window, null);
-        dialog.setView(register_window);
+        View rating_window = inflater.inflate(R.layout.rating_window, null);
+        dialog.setView(rating_window);
+        dialog.show();
 
-        final MaterialEditText ratingOfRoute = register_window.findViewById(R.id.ratingOfRouteField);
-        final MaterialEditText typeOfRoute = register_window.findViewById(R.id.typeOfRouteField);
-        final MaterialEditText commentOfRoute = register_window.findViewById(R.id.commemtField);
+        Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+        Button negativeButton = dialog.getButton(AlertDialog.BUTTON_NEGATIVE);
 
-        dialog.setNegativeButton("Отменить", new DialogInterface.OnClickListener() {
+        positiveButton.setText("Отправить");
+        negativeButton.setText("Отменить");
+
+        final RatingBar ratingOfRoute = rating_window.findViewById(R.id.ratingBar);
+        final MaterialEditText typeOfRoute = rating_window.findViewById(R.id.typeOfRouteField);
+        final MaterialEditText commentOfRoute = rating_window.findViewById(R.id.commemtField);
+
+        negativeButton.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                dialogInterface.dismiss();
+            public void onClick(View view) {
+                dialog.dismiss();
             }
         });
-        dialog.setPositiveButton("Отправить", new DialogInterface.OnClickListener() {
+
+        positiveButton.setOnClickListener(new View.OnClickListener() {
 
             int rating;
 
@@ -610,38 +837,139 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             String comment;
 
             @Override
-            public void onClick(DialogInterface dialogInterface, int i) {
-                if(TextUtils.isEmpty(ratingOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
+            public void onClick(View view) {
+                if(ratingOfRoute.getRating()==0 ||
+                        TextUtils.isEmpty(typeOfRoute.getText().toString()) ||
+                        TextUtils.isEmpty(commentOfRoute.getText().toString())){
+                    Snackbar.make(view, "Ошибка, заполните все данные", Snackbar.LENGTH_SHORT).show();
                 } else{
-                    rating = Integer.parseInt(ratingOfRoute.getText().toString());
-                }
-
-                if(TextUtils.isEmpty(typeOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
-                } else{
+                    rating = (int)ratingOfRoute.getRating();
                     typeOfRoad = typeOfRoute.getText().toString();
-                }
-
-                if(TextUtils.isEmpty(commentOfRoute.getText().toString())){
-                    Snackbar.make(root, "Ошибка", Snackbar.LENGTH_SHORT).show();
-                    return;
-                } else{
                     comment = commentOfRoute.getText().toString();
+
+                    Route route = new Route(rating, typeOfRoad, comment, areaId);
+
+                    InsertTaskRoute insertTaskRoute = new InsertTaskRoute();
+
+                    insertTaskRoute.execute(route);
+
+                    Snackbar.make(root, "Оценка маршрута отправлена", Snackbar.LENGTH_SHORT).show();
+
+                    dialog.dismiss();
+                }
+            }
+        });
+    }
+
+    private void showRegistrationForm(){
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Регистрация")
+                .setMessage("Введите логин и пароль")
+                .setPositiveButton(android.R.string.ok, null)
+                .setCancelable(false)
+                .create();
+
+        LayoutInflater inflater = LayoutInflater.from(this);
+        View register_window = inflater.inflate(R.layout.register_window, null);
+        dialog.setView(register_window);
+        dialog.show();
+
+        Button positiveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+
+        final MaterialEditText loginField = register_window.findViewById(R.id.login);
+        final MaterialEditText passwordField = register_window.findViewById(R.id.password);
+
+        positiveButton.setText("Зарегистрироваться");
+
+        positiveButton.setOnClickListener(new View.OnClickListener() {
+
+            String login;
+
+            String password;
+
+            @Override
+            public void onClick(View view) {
+
+                if(TextUtils.isEmpty(loginField.getText().toString()) || TextUtils.isEmpty(passwordField.getText().toString())){
+                    Snackbar.make(view, "Ошибка, введите логин и пароль", Snackbar.LENGTH_SHORT).show();
+                } else {
+
+                    login = loginField.getText().toString();
+
+                    password = passwordField.getText().toString();
+
+                    User user = new User(login, password);
+
+                    InsertTaskUser insertTaskUser = new InsertTaskUser();
+
+                    insertTaskUser.execute(user);
+
+                    synchronized (lock) {
+                        try {
+                            lock.wait();
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    if (insertTaskUser.error != null) {
+                        Snackbar.make(view, "Пользователь с таким логином уже есть", Snackbar.LENGTH_SHORT).show();
+                    } else {
+
+                        Snackbar.make(root, "Регистрация прошла успешно", Snackbar.LENGTH_SHORT).show();
+
+                        saveSettings(user);
+
+                        prefs.edit().putBoolean("firstrun", false).commit();
+
+                        dialog.dismiss();
+                    }
                 }
 
-                Route route = new Route(rating, typeOfRoad, comment, areaId);
-
-                InsertTaskRoute insertTaskRoute = new InsertTaskRoute();
-
-                insertTaskRoute.execute(route);
-
-                Snackbar.make(root, "Маршрут отправлен", Snackbar.LENGTH_SHORT).show();
             }
         });
 
-        dialog.show();
+    }
+
+    private class InsertTaskUser extends AsyncTask<User, Void, Void> {
+
+        public AlreadyExistLoginException error;
+
+        @Override
+        protected Void doInBackground(User... users) {
+
+            UserDAO userDAO = new UserDAO(dbHelper);
+
+            try {
+                userDAO.signUp(users[0]);
+            } catch (AlreadyExistLoginException e) {
+                error = e;
+            }
+
+            synchronized (lock){
+                lock.notify();
+            }
+
+            return null;
+        }
+    }
+
+    public void saveSettings(User user) {
+        SharedPreferences.Editor ed = getSharedPreferences("setting",MODE_PRIVATE).edit();
+        ed.putString(SAVE_LOGIN, user.getLogin());
+        ed.putString(SAVE_PASSWORD, user.getPassword());
+        ed.putString(SAVE_USERID, user.getUserid());
+        login = user.getLogin();
+        password = user.getPassword();
+        userid = user.getUserid();
+
+        ed.commit();
+    }
+
+    public void loadSettings() {
+        login = getSharedPreferences("setting",MODE_PRIVATE).getString(SAVE_LOGIN, "");
+        password = getSharedPreferences("setting",MODE_PRIVATE).getString(SAVE_PASSWORD, "");
+        userid = getSharedPreferences("setting",MODE_PRIVATE).getString(SAVE_USERID, "");
     }
 }
